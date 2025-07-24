@@ -15,4 +15,3 @@ venv/
 *.log
 
 .DS_Store
-results_cp_sat
