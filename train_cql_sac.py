@@ -1190,69 +1190,6 @@ class DiscreteCAL_QL:
 
 
 
-def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask: bool=True) -> Tuple[Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    dataset_dict = {
-        "adj": [],
-        "features": [],
-        "omegas": [],
-        "actions": [],
-        "action_masks": [],
-        "rewards": [],
-        "next_adj": [],
-        "next_features": [],
-        "next_omegas": [],
-        "next_actions": [],
-        "next_action_masks": [],
-        "terminals": [],
-    }
-    adj_shape = minari_list[0][0].observations["adj"].shape[1:]
-    features_shape = minari_list[0][0].observations["fea"].shape[1:]
-    omegas_shape = minari_list[0][0].observations["omega"].shape[1:]
-    mask_shape = minari_list[0][0].observations["mask"].shape[1:]
-    for dataset in minari_list:
-        for epi in dataset:
-            adj = epi.observations["adj"]
-            features = epi.observations["fea"]
-            omegas = epi.observations["omega"]
-            # print(epi.observations)
-            mask = epi.observations["mask"]
-            if switch_mask:
-                mask = ~mask
-                mask[-1] = ~mask[-1]
-
-            for i in range(epi.total_timesteps):
-                # omega = omegas[1]
-                fake_action = epi.actions[i]
-
-                real_action = np.where(omegas[i] == fake_action)[0][0]
-
-                dataset_dict["adj"].append(adj[i])
-                dataset_dict["features"].append(features[i])
-                dataset_dict["omegas"].append(omegas[i])
-                dataset_dict["actions"].append(real_action)
-                dataset_dict["action_masks"].append(mask[i])
-                dataset_dict["rewards"].append(epi.rewards[i])
-                dataset_dict["next_adj"].append(adj[i + 1])
-                dataset_dict["next_features"].append(features[i + 1])
-                dataset_dict["next_omegas"].append(omegas[i + 1])
-                dataset_dict["next_action_masks"].append(mask[i + 1])
-                done = epi.terminations[i] or epi.truncations[i]
-                dataset_dict["terminals"].append(done)
-    dataset_dict["adj"] = np.array(dataset_dict["adj"])
-    dataset_dict["features"] = np.array(dataset_dict["features"])
-    dataset_dict["omegas"] = np.array(dataset_dict["omegas"])
-    dataset_dict["actions"] = np.array(dataset_dict["actions"])
-    dataset_dict["action_masks"] = np.array(dataset_dict["action_masks"])
-    dataset_dict["rewards"] = np.array(dataset_dict["rewards"])
-    dataset_dict["next_adj"] = np.array(dataset_dict["next_adj"])
-    dataset_dict["next_features"] = np.array(dataset_dict["next_features"])
-    dataset_dict["next_omegas"] = np.array(dataset_dict["next_omegas"])
-    dataset_dict["next_action_masks"] = np.array(dataset_dict["next_action_masks"])
-    dataset_dict["terminals"] = np.array(dataset_dict["terminals"])
-
-    return dataset_dict, adj_shape, features_shape, omegas_shape, mask_shape
-
-
 @pyrallis.wrap()
 def train(config: TrainConfig):
     best_eval_score = -np.inf

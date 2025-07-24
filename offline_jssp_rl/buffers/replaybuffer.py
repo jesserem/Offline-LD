@@ -3,7 +3,7 @@ import torch
 from pathlib import Path
 from .dataset import Dataset, load_dataset, save_dataset
 import os
-from ..networks.gin_backup import aggr_obs
+from ..networks.gin import aggr_obs
 from typing import List, Callable, Dict
 import operator
 

@@ -1,17 +1,6 @@
 # Offline-LD
 This repository contains the official implementation of the paper "Offline Reinforcement Learning for Learning to Dispatch for Job Shop Scheduling"
 
-van Remmerden, J., Bukhsh, Z., & Zhang, Y. (2024). Offline Reinforcement Learning for Learning to Dispatch for Job Shop Scheduling. arXiv preprint arXiv:2409.10589.
-
-If you use our code please cite our work as follows:
-```
-@article{van2024offline,
-  title={Offline Reinforcement Learning for Learning to Dispatch for Job Shop Scheduling},
-  author={van Remmerden, Jesse and Bukhsh, Zaharah and Zhang, Yingqian},
-  journal={arXiv preprint arXiv:2409.10589},
-  year={2024}
-}
-```
 ## Requirements
 - Python 3.11
 - Pytorch 2.1.2
@@ -25,10 +14,22 @@ pip install -r requirements.txt
 
 ## Explanation of the code
 
-### 1. Training
+The code exits out of two components the dataset generation, used for training, and the training and evaluation of the models themself.
+
+### Dataset Generation
+The dataset generation consists of three parts: creating instance, creating solutions, and finally creating datasets. In the near future, we will make this process more accessible.
+#### Creating instances
+To create JSSP instance, you need to call "[generate_data.py](generate_data.py)". This file generates a NPY file which contains randomly generated instances for JSSP, based on the specifications in the file itself.
+#### Creating solutions
+The solution are in-turn found through constraint programming via the file "[create_data_cp_sat.py](Job_Shop_Scheduling_Benchmark_Environments_and_Instances/create_data_cp_sat.py)" in the folder "Job_Shop_Scheduling_Benchmark_Environments_and_Instances". This file generates solutions for the instances in a folder, whereby each solution is saved as a JSON file. 
+
+#### Creating datasets
+The datasets are created through the file "[create_dataset_from_data.py](main_code/create_dataset_from_data.py)" in the folder "main_code". This file creates the datasets from the generated instances and saves them as Minari datasets, which can easily be loaded in during training.
+
+### Training
 Training is done by either running "train_cql_qrdqn.py" or "train_cql_sac.py". The arguments are explained in the code itself.
 
-### 2. 'evaluate.py'
+### Evaluation
 This file is used to evaluate the trained models, by either calling "eval_cql_qrdqn_all.py" or "eval_cql_sac_all.py". The arguments are explained in the code itself.
 
 ## Other Information
@@ -36,3 +37,16 @@ To create more solution, you can use the files "create_data_cp_sat.py" or "creat
 
 ## Contact
 If you have any questions or discover a bug, please contact me at via [email](mailto:j.v.remmerden@tue.nl).
+
+## Reference
+If you found this code useful, please cite our work as follows:
+```
+@article{van2025offline,
+	author = {Remmerden, Jesse van and Bukhsh, Zaharah and Zhang, Yingqian},
+	journal = {Machine Learning},
+	number = {8},
+	pages = {191},
+	title = {Offline reinforcement learning for learning to dispatch for job shop scheduling},
+	volume = {114},
+	year = {2025}}
+```

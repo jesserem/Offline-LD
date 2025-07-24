@@ -4,6 +4,7 @@
 import os
 import time
 import uuid
+import pandas as pd
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from offline_jssp_rl.networks.mlp import MLP
@@ -57,21 +58,21 @@ class TrainConfig:
 
     n_jobs: int = 6 # Number of jobs
     n_machines: int = 6 # Number of machines
-    eval_instances: str = f""
-    dataset: str = f""
+    eval_instances: str = f"./eval_generated_data/generatedData6_6_Seed300.npy"
+    dataset: str = f"L2D/6_6/Large_dataset_norm_noisy-v0"
     # dataset: str = f"jsspl2d-norm_reward_05_noisy_prob_01-v0"
 
     eval_attributes: List[str] = ('last_time_step',)
 
-    seed: int = 4  # Sets Gym, PyTorch and Numpy seeds
-    eval_seed: int = 4  # Eval environment seed
+    seed: int = 0  # Sets Gym, PyTorch and Numpy seeds
+    eval_seed: int = 0  # Eval environment seed
     eval_freq: int = int(1e3)  # How often (time steps) we evaluate
     n_episodes: int = 1  # How many episodes run during evaluation
     train_epochs: int = 5000  # How many epochs to train
     eval_every_n_epochs: int = 10  # How often to evaluate
     use_epochs: bool = False
-    checkpoints_path: Optional[str] = None  # Save path
-    offline_iterations: int = int(2.5e5)  # Number of offline iterations
+    checkpoints_path: Optional[str] = "./larger_dataset_final"  # Save path
+    offline_iterations: int = int(50_000)  # Number of offline iterations
     load_model: str = ""  # Model load file name, "" doesn't load
     # CQL
     buffer_size: int = 1_000_000  # Replay buffer size
@@ -82,7 +83,7 @@ class TrainConfig:
     # soft_target_update_rate: float = 5e-3 # Target network update rate
     soft_target_update_rate: float = 1 # Target network update rate
     # target_update_period: int = 1
-    target_update_period: int = 1000  # Frequency of target nets updates
+    target_update_period: int = 2500  # Frequency of target nets updates
     cql_alpha: float = 1 # CQL offline regularization parameter
     use_per: bool = False  # Use PER
     use_munchausen: bool = False # Use Munchausen
@@ -97,7 +98,7 @@ class TrainConfig:
     cql_clip_diff_max: float = np.inf  # Q-function upper loss clipping
     orthogonal_init: bool = False  # Orthogonal initialization
     normalize: bool = True # Normalize states
-    normalize_reward: bool = False # Normalize reward
+    normalize_reward: bool = True # Normalize reward
     q_n_hidden_layers: int = 1  # Number of hidden layers in Q networks
     hidden_dim_fe: int = 64
     hidden_dim_fe_mlp: int = 64
@@ -108,9 +109,9 @@ class TrainConfig:
     activation_fn: str = "relu"  # Activation function
     graph_pool_type: str = "average"
     neighbor_pooling_type: str = "sum"
-    reward_scale: float = 0.01  # Reward scale for normalization
+    reward_scale: float = 1  # Reward scale for normalization
     reward_bias: float = 0 # Reward bias for normalization
-    q_dropout: float = 0  # Dropout in actor network
+    q_dropout: float = 0.4  # Dropout in actor network
     gnn_dropout: float = 0  # Dropout in GNN
     use_next_action: bool = True  # Use next action in Q networks
     # Cal-QL
@@ -121,6 +122,8 @@ class TrainConfig:
     decay_lr_steps: int = 1 # Decay steps for step size
     decay_gamma: float = 1 # Decay gamma for online tuning
 
+    num_instance: Optional[int] = 250
+
     decay_lr_step: bool = True  # Decay learning rate
     # Wandb logging
     project: str = "JSSP-Offline"
@@ -130,6 +133,8 @@ class TrainConfig:
     def __post_init__(self):
         self.name = f"{self.name}-{self.n_jobs}x{self.n_machines}-{str(uuid.uuid4())[:8]}"
         if self.checkpoints_path is not None:
+            if self.num_instance is not None:
+                self.checkpoints_path = self.checkpoints_path + f"_{str(self.num_instance)}"
             self.checkpoints_path = os.path.join(self.checkpoints_path, self.name)
 
 
@@ -662,7 +667,7 @@ class DiscreteCQL_DQN:
         q_values = q_values.masked_fill(~action_masks, -np.inf)
         q_action = q_values.gather(1, actions)
 
-        cql_qf_ood = torch.logsumexp(q_values / self.cql_temp, dim=1) * self.cql_temp
+        cql_qf_ood = torch.logsumexp(q_values / self.cql_temp, dim=1, keepdim=True) * self.cql_temp
         """Subtract the log likelihood of data"""
 
         cql_qf_diff = torch.clamp(
@@ -737,7 +742,7 @@ class DiscreteCQL_DQN:
         self.total_it = state_dict["total_it"]
 
 
-def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask: bool=True) -> Tuple[Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask: bool=True, num_instance: Optional[int] = None) -> Tuple[Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     dataset_dict = {
         "adj": [],
         "features": [],
@@ -757,18 +762,25 @@ def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask:
     omegas_shape = minari_list[0][0].observations["omega"].shape[1:]
     mask_shape = minari_list[0][0].observations["mask"].shape[1:]
     for dataset in minari_list:
+        if num_instance is None:
+            num_instance = len(dataset)
+        n_i = 0
         for epi in dataset:
+            n_i += 1
             adj = epi.observations["adj"]
             features = epi.observations["fea"]
             omegas = epi.observations["omega"]
+            # print(adj.shape)
+            # exit()
             # print(epi.observations)
             mask = epi.observations["mask"]
             if switch_mask:
                 mask = ~mask
                 mask[-1] = ~mask[-1]
 
-            for i in range(epi.total_timesteps):
+            for i in range(adj.shape[0] - 1):
                 # omega = omegas[1]
+
                 fake_action = epi.actions[i]
 
                 real_action = np.where(omegas[i] == fake_action)[0][0]
@@ -785,6 +797,9 @@ def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask:
                 dataset_dict["next_action_masks"].append(mask[i + 1])
                 done = epi.terminations[i] or epi.truncations[i]
                 dataset_dict["terminals"].append(done)
+            if n_i >= num_instance:
+                print(f"Loaded {n_i} instances, stopping at {num_instance} instances.")
+                break
     dataset_dict["adj"] = np.array(dataset_dict["adj"])
     dataset_dict["features"] = np.array(dataset_dict["features"])
     dataset_dict["omegas"] = np.array(dataset_dict["omegas"])
@@ -806,7 +821,7 @@ def train(config: TrainConfig):
 
     datasets = [config.dataset]
     dataset_min = [minari.load_dataset(d) for d in datasets]
-    dataset, adj_shape, features_shape, omega_shape, mask_shape = minari_dataset_to_dict(dataset_min)
+    dataset, adj_shape, features_shape, omega_shape, mask_shape = minari_dataset_to_dict(dataset_min, num_instance=config.num_instance)
 
     dataset_size = len(dataset["rewards"])
     env = SJSSP(config.n_jobs, config.n_machines)
@@ -1049,6 +1064,11 @@ def train(config: TrainConfig):
                     g_pool=g_pool_step,
                     deterministic=True,
                 )
+                dict_scores = {
+                    "makespan": make_spans,
+                    "runtime": run_times_instances,
+                }
+                df_scores = pd.DataFrame(dict_scores)
 
                 eval_score = eval_scores.mean()
                 mean_make_span = np.mean(make_spans)
@@ -1087,6 +1107,7 @@ def train(config: TrainConfig):
                         "run_time": mean_run_time,
                         "std_run_time": std_run_time,
                     }
+                    df_scores.to_csv(os.path.join(config.checkpoints_path, f"eval_scores_{t + 1}.csv"), index=False)
 
                     torch.save(
                         trainer.state_dict(),

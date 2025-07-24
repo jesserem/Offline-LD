@@ -4,10 +4,7 @@ from pathlib import Path
 # import gym
 import gymnasium as gym
 import numpy as np
-<<<<<<< HEAD
-=======
 from gym.utils import EzPickle
->>>>>>> b5a1b1d (First Commit)
 from gymnasium.spaces import Box, Discrete, Dict, MultiBinary, MultiDiscrete
 
 

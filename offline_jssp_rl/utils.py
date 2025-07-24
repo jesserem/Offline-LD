@@ -10,15 +10,10 @@ from collections import defaultdict
 from torch import nn
 import gymnasium as gym
 import minari
-<<<<<<< HEAD
+import time
+from .networks.gin import aggr_obs
 import time
 
-=======
-from .networks.gin_backup import aggr_obs
-import time
-
-from .networks.transformer import DecisionTransformer
->>>>>>> b5a1b1d (First Commit)
 from .buffers.dataset import Dataset
 import pandas as pd
 
@@ -645,160 +640,8 @@ def pad_along_axis(
 #     return cumsum
 
 
-<<<<<<< HEAD
-=======
-@torch.no_grad()
-def eval_rollout(
-    model: DecisionTransformer,
-    env: gym.Env,
-    seed: int,
-    target_return: float,
-    device: str = "cpu",
-    only_make_span: bool = False,
-    reward_scale: float = 1.0,
-    attributes: Optional[List[str]] = None
-) -> Tuple[float, float, Dict[str, Any]]:
-    states = torch.zeros(
-        1, model.episode_len + 1, model.state_dim, dtype=torch.float, device=device
-    )
-    actions = torch.zeros(
-        1, model.episode_len, model.action_dim, dtype=torch.float, device=device
-    )
-    returns = torch.zeros(1, model.episode_len + 1, dtype=torch.float, device=device)
-    time_steps = torch.arange(model.episode_len, dtype=torch.long, device=device)
-    time_steps = time_steps.view(1, -1)
-    state, _ = env.reset(seed=seed)
-    states[:, 0] = torch.as_tensor(state, dtype=torch.float, device=device)
-    returns[:, 0] = torch.as_tensor(target_return, device=device)
-    num_no_ops = 0
 
-    # cannot step higher than model episode len, as timestep embeddings will crash
-    episode_return, episode_len = 0.0, 0.0
-    for step in range(model.episode_len):
-        # first select history up to step, then select last seq_len states,
-        # step + 1 as : operator is not inclusive, last action is dummy with zeros
-        # (as model will predict last, actual last values are not important)
-        predicted_actions = model(  # fix this noqa!!!
-            states[:, : step + 1][:, -model.seq_len :],
-            actions[:, : step + 1][:, -model.seq_len :],
-            returns[:, : step + 1][:, -model.seq_len :].unsqueeze(-1),
-            time_steps[:, : step + 1][:, -model.seq_len :],
-        )
-        predicted_action = predicted_actions[0, -1].cpu().numpy()
-        input_action = np.argmax(predicted_action)
-        if input_action == env.action_space.n - 1:
-            num_no_ops += 1
-        predicted_action = np.eye(model.action_dim)[input_action]
-        next_state, reward, trunc, done, info = env.step(input_action)
-        # curr_action_mask = np.append(next_state["action_mask"], 0)
-        next_state = next_state
-        done = done or trunc
-        if only_make_span:
-            if done:
-                reward = -env.get_wrapper_attr('last_time_step')
-            else:
-                reward = 0.0
-            reward *= reward_scale
-        # at step t, we predict a_t, get s_{t + 1}, r_{t + 1}
-        actions[:, step] = torch.as_tensor(predicted_action)
-        states[:, step + 1] = torch.as_tensor(next_state)
-        returns[:, step + 1] = torch.as_tensor(returns[:, step] - reward)
-
-        episode_return += reward
-        episode_len += 1
-
-        if done:
-            break
-    att_dict = {}
-    if attributes:
-        for att in attributes:
-            att_dict[att] = getattr(env, att, None)
-
-    return episode_return, episode_len, att_dict
-
-@torch.no_grad()
-def eval_rollout_mask(
-    model: DecisionTransformer,
-    env: gym.Env,
-    seed: int,
-    target_return: float,
-    device: str = "cpu",
-    only_make_span: bool = False,
-    reward_scale: float = 1.0,
-    attributes: Optional[List[str]] = None
-) -> Tuple[float, float, Dict[str, Any]]:
-    states = torch.zeros(
-        1, model.episode_len + 1, model.state_dim, dtype=torch.float, device=device
-    )
-    actions = torch.zeros(
-        1, model.episode_len, model.action_dim, dtype=torch.float, device=device
-    )
-    action_masks = torch.zeros(
-        1, model.episode_len, model.action_dim, dtype=torch.bool, device=device
-    )
-    returns = torch.zeros(1, model.episode_len + 1, dtype=torch.float, device=device)
-    time_steps = torch.arange(model.episode_len, dtype=torch.long, device=device)
-    time_steps = time_steps.view(1, -1)
-    state, _ = env.reset(seed=seed)
-    states[:, 0] = torch.as_tensor(state["real_obs"], dtype=torch.float, device=device)
-    action_masks[:, 0] = torch.as_tensor(state["action_mask"], dtype=torch.float, device=device)
-    curr_action_mask = state["action_mask"]
-    returns[:, 0] = torch.as_tensor(target_return, device=device)
-    num_no_ops = 0
-
-    # cannot step higher than model episode len, as timestep embeddings will crash
-    episode_return, episode_len = 0.0, 0.0
-    for step in range(model.episode_len):
-        # first select history up to step, then select last seq_len states,
-        # step + 1 as : operator is not inclusive, last action is dummy with zeros
-        # (as model will predict last, actual last values are not important)
-        predicted_actions = model(  # fix this noqa!!!
-            states[:, : step + 1][:, -model.seq_len :],
-            actions[:, : step + 1][:, -model.seq_len :],
-            returns[:, : step + 1][:, -model.seq_len :].unsqueeze(-1),
-            time_steps[:, : step + 1][:, -model.seq_len :],
-        )
-        predicted_action = predicted_actions[0, -1].cpu().numpy()
-        # print(curr_action_mask.shape)
-        # print("the action mask is: ", curr_action_mask)
-        # print("The action mask type is: ", type(curr_action_mask))
-        masked_predicted_action = np.where(curr_action_mask, predicted_action, -np.inf)
-        # print("The predicted action is: ", predicted_action)
-        # exit()
-        input_action = np.argmax(masked_predicted_action)
-        if input_action == env.action_space.n - 1:
-            num_no_ops += 1
-        predicted_action = np.eye(model.action_dim)[input_action]
-
-        next_state, reward, trunc, done, info = env.step(input_action)
-        curr_action_mask = next_state["action_mask"]
-        next_state = next_state["real_obs"]
-        done = done or trunc
-        if only_make_span:
-            if done:
-                reward = -env.get_wrapper_attr('last_time_step')
-            else:
-                reward = 0.0
-            reward *= reward_scale
-        # at step t, we predict a_t, get s_{t + 1}, r_{t + 1}
-        actions[:, step] = torch.as_tensor(predicted_action)
-        states[:, step + 1] = torch.as_tensor(next_state)
-        returns[:, step + 1] = torch.as_tensor(returns[:, step] - reward)
-
-        episode_return += reward
-        episode_len += 1
-
-        if done:
-            break
-    att_dict = {}
-    if attributes:
-        for att in attributes:
-            att_dict[att] = getattr(env, att, None)
-
-    return episode_return, episode_len, att_dict
-
->>>>>>> b5a1b1d (First Commit)
-def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask: bool=True) -> Tuple[Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask: bool=True, num_instance: Optional[int] = None) -> Tuple[Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     dataset_dict = {
         "adj": [],
         "features": [],
@@ -818,18 +661,25 @@ def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask:
     omegas_shape = minari_list[0][0].observations["omega"].shape[1:]
     mask_shape = minari_list[0][0].observations["mask"].shape[1:]
     for dataset in minari_list:
+        if num_instance is None:
+            num_instance = len(dataset)
+        n_i = 0
         for epi in dataset:
+            n_i += 1
             adj = epi.observations["adj"]
             features = epi.observations["fea"]
             omegas = epi.observations["omega"]
+            # print(adj.shape)
+            # exit()
             # print(epi.observations)
             mask = epi.observations["mask"]
             if switch_mask:
                 mask = ~mask
                 mask[-1] = ~mask[-1]
 
-            for i in range(epi.total_timesteps):
+            for i in range(adj.shape[0] - 1):
                 # omega = omegas[1]
+
                 fake_action = epi.actions[i]
 
                 real_action = np.where(omegas[i] == fake_action)[0][0]
@@ -846,6 +696,9 @@ def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask:
                 dataset_dict["next_action_masks"].append(mask[i + 1])
                 done = epi.terminations[i] or epi.truncations[i]
                 dataset_dict["terminals"].append(done)
+            if n_i >= num_instance:
+                print(f"Loaded {n_i} instances, stopping at {num_instance} instances.")
+                break
     dataset_dict["adj"] = np.array(dataset_dict["adj"])
     dataset_dict["features"] = np.array(dataset_dict["features"])
     dataset_dict["omegas"] = np.array(dataset_dict["omegas"])
@@ -860,9 +713,7 @@ def minari_dataset_to_dict(minari_list: List[minari.MinariDataset], switch_mask:
 
     return dataset_dict, adj_shape, features_shape, omegas_shape, mask_shape
 
-<<<<<<< HEAD
-TensorBatch = List[torch.Tensor]
-=======
+
 TensorBatch = List[torch.Tensor]
 def combine_offline_online_batch(online_batch: TensorBatch, offline_batch: TensorBatch) -> TensorBatch:
     (
@@ -917,4 +768,4 @@ def combine_offline_online_batch(online_batch: TensorBatch, offline_batch: Tenso
     # print(rewards)
 
     return [adj, features, candidates, actions, action_masks, rewards, next_adj, next_features, next_candidates, next_action_masks, dones]
->>>>>>> b5a1b1d (First Commit)
+
