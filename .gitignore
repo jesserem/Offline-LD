@@ -15,5 +15,4 @@ venv/
 *.log
 
 .DS_Store
-create_dataset_from_data.py
 results_cp_sat
